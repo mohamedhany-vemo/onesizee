@@ -12,3 +12,72 @@ function escapeHtml(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;',
 function openIntro(){const pull=$('#zipPull'),intro=$('#intro'),zipper=pull.closest('.zipper');let startY=null,startTop=0,dragging=false;const maxTravel=()=>Math.max(0,(zipper?.clientHeight||0)-pull.offsetHeight);const reset=()=>{pull.style.top='0px';pull.classList.remove('dragging')};const finish=()=>{if(state.introOpened)return;state.introOpened=true;pull.style.top=maxTravel()+'px';intro.classList.add('hide');document.body.classList.remove('lock')};pull.addEventListener('pointerdown',e=>{if(state.introOpened)return;e.preventDefault();dragging=true;startY=e.clientY;startTop=parseFloat(getComputedStyle(pull).top)||0;pull.setPointerCapture(e.pointerId);pull.classList.add('dragging')});pull.addEventListener('pointermove',e=>{if(!dragging||state.introOpened)return;e.preventDefault();const travel=maxTravel();const next=Math.max(0,Math.min(travel,startTop+(e.clientY-startY)));pull.style.top=next+'px';if(next>=travel*.88)finish()});pull.addEventListener('pointerup',()=>{if(!dragging)return;dragging=false;if(!state.introOpened)reset()});pull.addEventListener('pointercancel',()=>{dragging=false;if(!state.introOpened)reset()});}
 function bind(){openIntro();$('#langBtn').onclick=()=>{state.lang=state.lang==='en'?'ar':'en';applyLang()};$('#searchInput').oninput=e=>{state.query=e.target.value;renderProducts()};$('#clearSearch').onclick=()=>{$('#searchInput').value='';state.query='';renderProducts()};$('#searchSubmit').onclick=()=>$('#searchInput').focus();$$('.filter').forEach(b=>b.onclick=()=>{$$('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');state.category=b.dataset.cat;renderProducts()});$('#cartBtn').onclick=openDrawer;$('#closeDrawer').onclick=closeDrawer;$('#overlay').onclick=closeDrawer;$('#closeModal').onclick=closeProduct;$('#modalAdd').onclick=()=>addToCart();$('#checkoutBtn').onclick=checkout;$('#closeCheckout').onclick=()=>$('#checkoutModal').classList.remove('open');$('#checkoutForm').onsubmit=e=>{e.preventDefault();alert(state.lang==='ar'?'تم تجهيز الطلب كعرض تجريبي. عند ربط Odoo سيتم إنشاء الطلب هناك.':'Demo order ready. After the Odoo connection, the order will be created there.');$('#checkoutModal').classList.remove('open')};$('#menuBtn').onclick=()=>$('#mobileMenu').style.display='flex';$('#closeMenu').onclick=()=>$('#mobileMenu').style.display='none';$$('#mobileMenu a').forEach(a=>a.onclick=()=>$('#mobileMenu').style.display='none');$('#wishBtn').onclick=()=>{$('#shop').scrollIntoView({behavior:'smooth'});};}
 window.addEventListener('DOMContentLoaded',()=>{bind();applyLang();setTimeout(()=>{$('#loader').style.opacity='0';setTimeout(()=>$('#loader').remove(),650)},900)});
+// بيانات الربط مع أودو الخاصة بمتجرك
+const ODOO_URL = "https://onesizee.odoo.com/jsonrpc";
+const ODOO_DB = "onesizee";
+const ODOO_EMAIL = "mohamedhanysaad660@gmail.com";
+const ODOO_API_KEY = "e3f7c615b7c17c356c8d828c2c02cad9a48d9920";
+
+// دالة لجلب المنتجات من قاعدة بيانات أودو
+async function loadProducts() {
+  try {
+    // 1. تسجيل الدخول والتحقق
+    const authResponse = await fetch(ODOO_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: {
+          service: "common",
+          method: "authenticate",
+          args: [ODOO_DB, ODOO_EMAIL, ODOO_API_KEY, {}]
+        }
+      })
+    });
+
+    const authData = await authResponse.json();
+    const uid = authData.result;
+
+    if (!uid) {
+      console.error("فشل تسجيل الدخول لأودو");
+      return;
+    }
+
+    // 2. سحب المنتجات وأسعارها ومخزونها
+    const dataResponse = await fetch(ODOO_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: {
+          service: "object",
+          method: "execute_kw",
+          args: [
+            ODOO_DB,
+            uid,
+            ODOO_API_KEY,
+            "product.template",
+            "search_read",
+            [[["sale_ok", "=", true]]], // جلب المنتجات القابلة للبيع
+            { fields: ["id", "name", "list_price", "description_sale", "qty_available"] }
+          ]
+        }
+      })
+    });
+
+    const productsData = await dataResponse.json();
+    const products = productsData.result;
+
+    console.log("المنتجات التي تم جلبها من أودو:", products);
+    // من هنا يمكنك عرض المنتجات داخل صفحة الويب في الـ HTML
+    return products;
+
+  } catch (error) {
+    console.error("حدث خطأ أثناء الاتصال بأودو:", error);
+  }
+}
+
+// تشغيل الدالة لجلب المنتجات
+loadProducts();
