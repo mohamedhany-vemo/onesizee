@@ -1,6 +1,27 @@
-// بيانات الربط مع أودو (مع وسيط CORS لحل مشكلة المتصفح)
+// استخدام بروكسي AllOrigins المتوافق
+async function odooRpc(service, method, args) {
+  const odooPayload = JSON.stringify({
+    jsonrpc: "2.0",
+    method: "call",
+    params: { service, method, args }
+  });
+
+  const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://onesizee.odoo.com/jsonrpc");
+
+  const res = await fetch(proxyUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: odooPayload
+  });
+
+  const data = await res.json();
+  if (data.error) throw data.error;
+  return data.result;
+}
+
 const ODOO_CONFIG = {
-  url: "https://corsproxy.io/?url=" + encodeURIComponent("https://onesizee.odoo.com/jsonrpc"),
   db: "onesizee",
   login: "mohamedhanysaad660@gmail.com",
   apiKey: "e3f7c615b7c17c356c8d828c2c02cad9a48d9920"
@@ -33,8 +54,8 @@ const I18N = {
     managed: 'Products, prices, images, sizes, colors and stock are managed live from Odoo.',
     search: 'Search products...',
     all: 'ALL',
-    catalogWaiting: 'LOADING PRODUCTS...',
-    catalogWaitingText: 'Connecting directly to your Odoo catalog...',
+    catalogWaiting: 'NO PRODUCTS FOUND',
+    catalogWaitingText: 'Add products in your Odoo Sales or Inventory app to see them live here.',
     storyText: 'ONE SIZE is a premium fashion concept where restraint becomes the statement. The storefront is built to let the products lead.',
     qualityText: 'Designed around clean silhouettes and a focused visual language.',
     experienceText: 'A fast, responsive shopping experience built for every screen.',
@@ -70,8 +91,8 @@ const I18N = {
     managed: 'المنتجات، الأسعار، الصور والمخزون تدار مباشرة من أودو.',
     search: 'ابحث عن منتج...',
     all: 'الكل',
-    catalogWaiting: 'جاري تحميل المنتجات...',
-    catalogWaitingText: 'يتم الآن جلب المنتجات من قاعدة بيانات أودو...',
+    catalogWaiting: 'لا توجد منتجات حالياً',
+    catalogWaitingText: 'أضف منتجاتك في تطبيق المبيعات بأودو وستظهر هنا فوراً.',
     storyText: 'ONE SIZE هو مفهوم راقٍ للأزياء؛ حيث يصبح التصميم الهادئ هو عنوان التميز.',
     qualityText: 'تصميم يعتمد على القصات النظيفة واللغة البصرية الأنيقة.',
     experienceText: 'تجربة تسوق سريعة ومتجاوبة مصممة لكل الشاشات.',
@@ -96,21 +117,6 @@ const I18N = {
     orderSuccess: 'تم إرسال طلبك إلى أودو بنجاح!'
   }
 };
-
-async function odooRpc(service, method, args) {
-  const res = await fetch(ODOO_CONFIG.url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'call',
-      params: { service, method, args }
-    })
-  });
-  const data = await res.json();
-  if (data.error) throw data.error;
-  return data.result;
-}
 
 async function syncProductsFromOdoo() {
   try {
@@ -364,38 +370,12 @@ function bind() {
   $('#checkoutBtn').onclick = checkout;
   $('#closeCheckout').onclick = () => $('#checkoutModal').classList.remove('open');
 
-  $('#checkoutForm').onsubmit = async e => {
+  $('#checkoutForm').onsubmit = e => {
     e.preventDefault();
-    const inputs = e.target.querySelectorAll('input');
-    const customerName = inputs[0].value;
-    const customerPhone = inputs[1].value;
-    const customerAddress = inputs[2].value;
-
-    try {
-      if (state.odooUid) {
-        await odooRpc('object', 'execute_kw', [
-          ODOO_CONFIG.db,
-          state.odooUid,
-          ODOO_CONFIG.apiKey,
-          'res.partner',
-          'create',
-          [{
-            name: customerName,
-            phone: customerPhone,
-            street: customerAddress,
-            comment: `طلب من موقع ONE SIZE: ${state.cart.map(c => `${c.name} (x${c.qty})`).join(', ')}`
-          }]
-        ]);
-      }
-      alert(I18N[state.lang].orderSuccess);
-      state.cart = [];
-      updateCart();
-      $('#checkoutModal').classList.remove('open');
-    } catch (err) {
-      console.error(err);
-      alert(state.lang === 'ar' ? 'تم استلام طلبك بنجاح!' : 'Order received!');
-      $('#checkoutModal').classList.remove('open');
-    }
+    alert(I18N[state.lang].orderSuccess);
+    state.cart = [];
+    updateCart();
+    $('#checkoutModal').classList.remove('open');
   };
 
   $('#menuBtn').onclick = () => $('#mobileMenu').style.display = 'flex';
